@@ -327,7 +327,9 @@ type
     constructor Create(Args: PJsValueRefArray = nil; ArgCount: Word = 0; AFinalize: Boolean = False); virtual;
     destructor Destroy; override;
 
+    function AddRef: Integer;
     class procedure Project(const AName: UnicodeString = ''; UseStrictRules: Boolean = True);
+    function Release: Integer;
 
     property Context: TChakraCoreContext read GetContext;
     property ContextHandle: JsContextRef read GetContextHandle;
@@ -1258,6 +1260,7 @@ begin
   ChakraCoreCheck(JsSetCurrentContext(Handle));
   ChakraCoreCheck(JsSetPromiseContinuationCallback(PromiseContinuation, Self));
   FProxyTargetSymbol := JsCreateSymbol('__proxy_target__');
+  ChakraCoreCheck(JsAddRef(FProxyTargetSymbol, nil));
   DoActivate;
 end;
 
@@ -1516,6 +1519,11 @@ begin
   inherited;
 end;
 
+function TNativeObject.AddRef: Integer;
+begin
+  ChakraCoreCheck(JsAddRef(FTargetInstance, @Result));
+end;
+
 class procedure TNativeObject.Project(const AName: UnicodeString; UseStrictRules: Boolean);
 var
   ConstructorName: UnicodeString;
@@ -1529,6 +1537,11 @@ begin
   JsSetProperty(JsGlobal, ConstructorName, ConstructorFunc, UseStrictRules);
   RegisterPrototype;
   ChakraCoreCheck(JsSetPrototype(ConstructorFunc, Prototype));
+end;
+
+function TNativeObject.Release: Integer;
+begin
+  ChakraCoreCheck(JsRelease(FTargetInstance, @Result));
 end;
 
 end.
