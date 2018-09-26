@@ -47,13 +47,13 @@ type
     FOnPrint: TConsolePrintEvent;
     
     function Assert(Args: PJsValueRef; ArgCount: Word): JsValueRef;
-    function Log(Args: PJsValueRef; ArgCount: Word; Level: TInfoLevel): JsValueRef;
     function LogError(Args: PJsValueRef; ArgCount: Word): JsValueRef;
     function LogInfo(Args: PJsValueRef; ArgCount: Word): JsValueRef;
     function LogNone(Args: PJsValueRef; ArgCount: Word): JsValueRef;
     function LogWarn(Args: PJsValueRef; ArgCount: Word): JsValueRef;
   protected
     procedure DoPrint(const Text: UnicodeString; Level: TInfoLevel = ilNone); virtual;
+    function Log(Args: PJsValueRef; ArgCount: Word; Level: TInfoLevel): JsValueRef;
     class procedure RegisterMethods(AInstance: JsValueRef); override;
   public
     property OnPrint: TConsolePrintEvent read FOnPrint write FOnPrint;
@@ -120,6 +120,34 @@ begin
     Log(Args, ArgCount, ilError);
 end;
 
+function TConsole.LogError(Args: PJsValueRef; ArgCount: Word): JsValueRef;
+begin
+  Result := Log(Args, ArgCount, ilError);
+end;
+
+function TConsole.LogInfo(Args: PJsValueRef; ArgCount: Word): JsValueRef;
+begin
+  Result := Log(Args, ArgCount, ilInfo);
+end;
+
+function TConsole.LogNone(Args: PJsValueRef; ArgCount: Word): JsValueRef;
+begin
+  Result := Log(Args, ArgCount, ilNone);
+end;
+
+function TConsole.LogWarn(Args: PJsValueRef; ArgCount: Word): JsValueRef;
+begin
+  Result := Log(Args, ArgCount, ilWarn);
+end;
+
+{ TConsole protected }
+
+procedure TConsole.DoPrint(const Text: UnicodeString; Level: TInfoLevel);
+begin
+  if Assigned(FOnPrint) then
+    FOnPrint(Self, Text, Level);
+end;
+
 function TConsole.Log(Args: PJsValueRef; ArgCount: Word; Level: TInfoLevel): JsValueRef;
 var
   FirstArg, S, SCopy: UnicodeString;
@@ -166,7 +194,7 @@ begin
           'o':
             S := S + JsInspect('', Arg^);
           's':
-            S := S + JsStringToUnicodeString(Arg^);
+            S := S + JsStringToUnicodeString(JsValueAsJsString(Arg^));
         end;
       end;
 
@@ -181,39 +209,13 @@ begin
   begin
     for I := 0 to ArgCount - 1 do
     begin
-      S := S + JsStringToUnicodeString(Arg^);
+      if S <> '' then
+        S := S + ' ';
+      S := S + JsStringToUnicodeString(JsValueAsJsString(Arg^));
       Inc(Arg);
     end;
   end;
   DoPrint(S, Level);
-end;
-
-function TConsole.LogError(Args: PJsValueRef; ArgCount: Word): JsValueRef;
-begin
-  Result := Log(Args, ArgCount, ilError);
-end;
-
-function TConsole.LogInfo(Args: PJsValueRef; ArgCount: Word): JsValueRef;
-begin
-  Result := Log(Args, ArgCount, ilInfo);
-end;
-
-function TConsole.LogNone(Args: PJsValueRef; ArgCount: Word): JsValueRef;
-begin
-  Result := Log(Args, ArgCount, ilNone);
-end;
-
-function TConsole.LogWarn(Args: PJsValueRef; ArgCount: Word): JsValueRef;
-begin
-  Result := Log(Args, ArgCount, ilWarn);
-end;
-
-{ TConsole protected }
-
-procedure TConsole.DoPrint(const Text: UnicodeString; Level: TInfoLevel);
-begin
-  if Assigned(FOnPrint) then
-    FOnPrint(Self, Text, Level);
 end;
 
 class procedure TConsole.RegisterMethods(AInstance: JsValueRef);
