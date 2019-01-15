@@ -2,7 +2,7 @@
 
 MIT License
 
-Copyright (c) 2018 Ondrej Kelle
+Copyright (c) 2019 Ondrej Kelle
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -83,6 +83,10 @@ function StringToJsString(const S: UnicodeString): JsValueRef; overload;
 function JsEscapeString(const S: UTF8String): UTF8String; overload;
 function JsEscapeString(const S: UnicodeString): UnicodeString; overload;
 
+function JsCreateArray(Length: Integer): JsValueRef;
+function JsArrayLength(Value: JsValueRef): Integer;
+function JsArrayGetElement(Value: JsValueRef; Index: Integer): JsValueRef;
+procedure JsArraySetElement(Value: JsValueRef; Index: Integer; ElementValue: JsValueRef);
 function StringsToJsArray(const Strings: array of UnicodeString): JsValueRef; overload;
 function StringsToJsArray(const Strings: array of UTF8String): JsValueRef; overload;
 
@@ -158,6 +162,10 @@ function JsDefineProperty(const PropName: UTF8String; Configurable, Enumerable: 
 function JsDefineProperty(const PropName: UnicodeString; Configurable, Enumerable: Boolean;
   GetAccessor, SetAccessor: JsValueRef; Scope: JsValueRef = nil; UseStrictRules: Boolean = True): Boolean; overload;
 
+function JsParseScript(const Script, Name: UTF8String; SourceContext: NativeUInt = 0;
+  IsLibraryCode: Boolean = False): JsValueRef; overload;
+function JsParseScript(const Script, Name: UnicodeString; SourceContext: NativeUInt = 0;
+  IsLibraryCode: Boolean = False): JsValueRef; overload;
 function JsRunScript(const Script, Name: UTF8String; SourceContext: NativeUInt = 0;
   IsLibraryCode: Boolean = False): JsValueRef; overload;
 function JsRunScript(const Script, Name: UnicodeString; SourceContext: NativeUInt = 0;
@@ -408,14 +416,34 @@ begin
   Result := WideStringReplace(Result, '''', '\''', [rfReplaceAll]);
 end;
 
+function JsCreateArray(Length: Integer): JsValueRef;
+begin
+  ChakraCoreCheck(ChakraCommon.JsCreateArray(Length, Result));
+end;
+
+function JsArrayLength(Value: JsValueRef): Integer;
+begin
+  Result := JsNumberToInt(JsGetProperty(Value, 'length'));
+end;
+
+function JsArrayGetElement(Value: JsValueRef; Index: Integer): JsValueRef;
+begin
+  ChakraCoreCheck(JsGetIndexedProperty(Value, IntToJsNumber(Index), Result));
+end;
+
+procedure JsArraySetElement(Value: JsValueRef; Index: Integer; ElementValue: JsValueRef);
+begin
+  ChakraCoreCheck(JsSetIndexedProperty(Value, IntToJsNumber(Index), ElementValue));
+end;
+
 function StringsToJsArray(const Strings: array of UnicodeString): JsValueRef;
 var
   L, I: Integer;
 begin
   L := Length(Strings);
-  ChakraCoreCheck(JsCreateArray(L, Result));
+  Result := JsCreateArray(L);
   for I := 0 to L - 1 do
-    JsSetIndexedProperty(Result, IntToJsNumber(I), StringToJsString(Strings[I]));
+    JsArraySetElement(Result, I, StringToJsString(Strings[I]));
 end;
 
 function StringsToJsArray(const Strings: array of UTF8String): JsValueRef;
@@ -423,9 +451,9 @@ var
   L, I: Integer;
 begin
   L := Length(Strings);
-  ChakraCoreCheck(JsCreateArray(L, Result));
+  Result := JsCreateArray(L);
   for I := 0 to L - 1 do
-    JsSetIndexedProperty(Result, IntToJsNumber(I), StringToJsString(Strings[I]));
+    JsArraySetElement(Result, I, StringToJsString(Strings[I]));
 end;
 
 function JsBooleanToBoolean(Value: JsValueRef): Boolean;
@@ -482,16 +510,15 @@ end;
 
 procedure JsEnumArray(Value: JsValueRef; EnumFunc: TJsEnumArrayFunc; Data: Pointer);
 var
-  I, L: Integer;
+  I: Integer;
   ElementValue: JsValueRef;
 begin
   if JsGetValueType(Value) <> JsArray then
     Exit;
 
-  L := JsNumberToInt(JsGetProperty(Value, 'length'));
-  for I := 0 to L - 1 do
+  for I := 0 to JsArrayLength(Value) - 1 do
   begin
-    ChakraCoreCheck(JsGetIndexedProperty(Value, IntToJsNumber(I), ElementValue));
+    ElementValue := JsArrayGetElement(Value, I);
     if EnumFunc(Value, I, ElementValue, Data) then
       Break;
   end;
@@ -866,9 +893,7 @@ end;
 function JsCallFunction(const FunctionName: UTF8String; const Args: array of JsValueRef;
   ThisArg: JsValueRef): JsValueRef;
 var
-  L: Integer;
   Func: JsValueRef;
-  NewArgs: array of JsValueRef;
 begin
   if not Assigned(ThisArg) then
     ThisArg := JsGlobal;
@@ -1035,6 +1060,30 @@ begin
     UseStrictRules);
 end;
 
+function JsParseScript(const Script, Name: UTF8String; SourceContext: NativeUInt; IsLibraryCode: Boolean): JsValueRef;
+const
+  ParseScriptAttributes: array[Boolean] of JsParseScriptAttributes = ([], [JsParseScriptAttributeLibraryCode]);
+var
+  ScriptName, ScriptSource: JsValueRef;
+begin
+  ScriptName := StringToJsString(Name);
+  ChakraCoreCheck(JsCreateExternalArrayBuffer(Pointer(Script), Length(Script), nil, nil, ScriptSource));
+  ChakraCoreCheck(JsParse(ScriptSource, SourceContext, ScriptName, ParseScriptAttributes[IsLibraryCode], Result));
+end;
+
+function JsParseScript(const Script, Name: UnicodeString; SourceContext: NativeUInt; IsLibraryCode: Boolean): JsValueRef;
+const
+  ParseScriptAttributes: array[Boolean] of JsParseScriptAttributes = ([JsParseScriptAttributeArrayBufferIsUtf16Encoded],
+    [JsParseScriptAttributeLibraryCode, JsParseScriptAttributeArrayBufferIsUtf16Encoded]);
+var
+  ScriptName, ScriptSource: JsValueRef;
+begin
+  ScriptName := StringToJsString(Name);
+  ChakraCoreCheck(JsCreateExternalArrayBuffer(Pointer(PUnicodeChar(Script)), Length(Script) * SizeOf(UnicodeChar),
+    nil, nil, ScriptSource));
+  ChakraCoreCheck(JsParse(ScriptSource, SourceContext, ScriptName, ParseScriptAttributes[IsLibraryCode], Result));
+end;
+
 function JsRunScript(const Script, Name: UTF8String; SourceContext: NativeUInt; IsLibraryCode: Boolean): JsValueRef;
 const
   ParseScriptAttributes: array[Boolean] of JsParseScriptAttributes = ([], [JsParseScriptAttributeLibraryCode]);
@@ -1054,7 +1103,7 @@ var
   ScriptName, ScriptSource: JsValueRef;
 begin
   ScriptName := StringToJsString(Name);
-  ChakraCoreCheck(JsCreateExternalArrayBuffer(Pointer(PUnicodeChar(Script)), (Length(Script)) * SizeOf(UnicodeChar),
+  ChakraCoreCheck(JsCreateExternalArrayBuffer(Pointer(PUnicodeChar(Script)), Length(Script) * SizeOf(UnicodeChar),
     nil, nil, ScriptSource));
   ChakraCoreCheck(JsRun(ScriptSource, SourceContext, ScriptName, ParseScriptAttributes[IsLibraryCode], Result));
 end;

@@ -2,7 +2,7 @@
 
 MIT License
 
-Copyright (c) 2018 Ondrej Kelle
+Copyright (c) 2019 Ondrej Kelle
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -47,7 +47,7 @@ interface
 const
   CHAKRA_CORE_MAJOR_VERSION = 1;
   CHAKRA_CORE_MINOR_VERSION = 11;
-  CHAKRA_CORE_PATCH_VERSION = 3;
+  CHAKRA_CORE_PATCH_VERSION = 5;
   CHAKRA_CORE_VERSION_RELEASE_QFE = 0; // Redundant with PATCH_VERSION. Keep this value set to 0.
 
 // -------------
